@@ -10,12 +10,12 @@ const PORT = process.env.PORT || 3000;
 // simple memory store
 const sessions = {};
 
-// 👉 HOME (Render health check)
+// 👉 HOME
 app.get("/", (req, res) => {
   res.send("App running 🚀");
 });
 
-// 👉 AUTH START (correct for Render)
+// 👉 AUTH START
 app.get("/auth", async (req, res) => {
   const { shop } = req.query;
 
@@ -28,7 +28,7 @@ app.get("/auth", async (req, res) => {
   return res.redirect(installUrl);
 });
 
-// 👉 AUTH CALLBACK
+// 👉 AUTH CALLBACK (FIXED FLOW)
 app.get("/auth/callback", async (req, res) => {
   try {
     const { shop, code } = req.query;
@@ -37,7 +37,6 @@ app.get("/auth/callback", async (req, res) => {
       return res.send("Missing params");
     }
 
-    // 🔥 Exchange code for access token
     const response = await fetch(`https://${shop}/admin/oauth/access_token`, {
       method: "POST",
       headers: {
@@ -52,36 +51,39 @@ app.get("/auth/callback", async (req, res) => {
 
     const data = await response.json();
 
-    // 🔥 store session manually
+    // store session
     sessions[shop] = {
       shop,
       accessToken: data.access_token,
     };
 
-    res.send("Auth successful ✅");
+    // 🔥 IMPORTANT: redirect to billing
+    return res.redirect(`/billing?shop=${shop}`);
+
   } catch (error) {
     console.error(error);
     res.status(500).send("Auth failed");
   }
 });
 
+// 👉 BILLING
 app.get("/billing", async (req, res) => {
   const { shop } = req.query;
 
   const session = sessions[shop];
 
-  // 🔥 if no session → re-auth
   if (!session) {
     return res.redirect(`/auth?shop=${shop}`);
   }
 
   const client = new shopify.clients.Graphql({
-  session: {
-    shop: shop,
-    accessToken: session.accessToken,
-  },
-});
-  const returnUrl = `${process.env.HOST}/billing/success`;
+    session: {
+      shop: shop,
+      accessToken: session.accessToken,
+    },
+  });
+
+  const returnUrl = `${process.env.HOST}/billing/success?shop=${shop}`;
 
   const mutation = `
     mutation {
@@ -107,6 +109,7 @@ app.get("/billing", async (req, res) => {
   return res.redirect(url);
 });
 
+// 👉 SUCCESS PAGE (FIXED)
 app.get("/billing/success", (req, res) => {
   res.send("Payment successful 🎉");
 });
