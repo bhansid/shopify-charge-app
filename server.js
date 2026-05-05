@@ -45,6 +45,47 @@ app.get("/auth/callback", async (req, res) => {
   }
 });
 
+app.get("/billing", async (req, res) => {
+  const { shop } = req.query;
+
+  const session = sessions[shop];
+  if (!session) return res.send("No session found");
+
+  const client = new shopify.clients.Graphql({ session });
+
+  const returnUrl = `${process.env.HOST}/billing/success`;
+
+  const mutation = `
+    mutation {
+      appPurchaseOneTimeCreate(
+        name: "Maintenance Fee",
+        price: { amount: 20.0, currencyCode: USD },
+        returnUrl: "${returnUrl}"
+      ) {
+        confirmationUrl
+        appPurchaseOneTime {
+          id
+        }
+        userErrors {
+          field
+          message
+        }
+      }
+    }
+  `;
+
+  const response = await client.query({ data: mutation });
+
+  const url =
+    response.body.data.appPurchaseOneTimeCreate.confirmationUrl;
+
+  return res.redirect(url);
+});
+
+app.get("/billing/success", (req, res) => {
+  res.send("Payment successful 🎉");
+});
+
 // 👉 START SERVER
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
