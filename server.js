@@ -31,12 +31,32 @@ app.get("/auth", async (req, res) => {
 // 👉 AUTH CALLBACK
 app.get("/auth/callback", async (req, res) => {
   try {
-    const session = await shopify.auth.callback({
-      rawRequest: req,
-      rawResponse: res,
+    const { shop, code } = req.query;
+
+    if (!shop || !code) {
+      return res.send("Missing params");
+    }
+
+    // 🔥 Exchange code for access token
+    const response = await fetch(`https://${shop}/admin/oauth/access_token`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        client_id: process.env.SHOPIFY_API_KEY,
+        client_secret: process.env.SHOPIFY_API_SECRET,
+        code,
+      }),
     });
 
-    sessions[session.shop] = session;
+    const data = await response.json();
+
+    // 🔥 store session manually
+    sessions[shop] = {
+      shop,
+      accessToken: data.access_token,
+    };
 
     res.send("Auth successful ✅");
   } catch (error) {
@@ -55,8 +75,12 @@ app.get("/billing", async (req, res) => {
     return res.redirect(`/auth?shop=${shop}`);
   }
 
-  const client = new shopify.clients.Graphql({ session });
-
+  const client = new shopify.clients.Graphql({
+  session: {
+    shop: shop,
+    accessToken: session.accessToken,
+  },
+});
   const returnUrl = `${process.env.HOST}/billing/success`;
 
   const mutation = `
