@@ -49,7 +49,11 @@ app.get("/billing", async (req, res) => {
   const { shop } = req.query;
 
   const session = sessions[shop];
-  if (!session) return res.send("No session found");
+
+  // 🔥 if no session → re-auth
+  if (!session) {
+    return res.redirect(`/auth?shop=${shop}`);
+  }
 
   const client = new shopify.clients.Graphql({ session });
 
@@ -63,9 +67,6 @@ app.get("/billing", async (req, res) => {
         returnUrl: "${returnUrl}"
       ) {
         confirmationUrl
-        appPurchaseOneTime {
-          id
-        }
         userErrors {
           field
           message
